@@ -28,8 +28,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
+# env files (örnek dosya hariç)
 .env*
+!.env.example
 
 # vercel
 .vercel

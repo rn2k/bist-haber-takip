@@ -1,20 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-interface StockRef {
-  code: string;
-  name: string;
-}
-
-interface DailyPrice {
-  date: string;
-  open: number | null;
-  high: number | null;
-  low: number | null;
-  close: number | null;
-  volume: number | null;
-}
+import { getJson } from "@/lib/api-client";
+import type { DailyPrice, StockRef, StockResponse } from "@/types";
 
 export default function StockTable({ stock }: { stock: StockRef }) {
   const [prices, setPrices] = useState<DailyPrice[]>([]);
@@ -23,20 +11,23 @@ export default function StockTable({ stock }: { stock: StockRef }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetch(`/api/stock/${stock.code}`)
-      .then((res) => res.json())
+    // Bileşen her hisse için `key` ile yeniden oluşturulduğundan durum (loading,
+    // error, prices) kendiliğinden sıfırlanır. Bileşen kaldırılırsa (kullanıcı
+    // başka hisseye geçerse) devam eden istek iptal edilir; geç dönen eski
+    // yanıt yeni hissenin tablosunun üzerine yazılamaz.
+    const controller = new AbortController();
+    getJson<StockResponse>(`/api/stock/${encodeURIComponent(stock.code)}`, controller.signal)
       .then((data) => {
-        if (data.error) {
-          setError(data.error);
-        } else {
-          setPrices(data.prices ?? []);
-          setCurrency(data.currency ?? "TRY");
-        }
+        setPrices(data.prices);
+        setCurrency(data.currency);
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .catch((err: Error) => {
+        if (err.name !== "AbortError") setError(err.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [stock.code]);
 
   const format = (n: number | null) =>
