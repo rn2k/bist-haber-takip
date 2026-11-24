@@ -2,21 +2,8 @@
 
 import { useEffect, useState } from "react";
 import StockTable from "@/components/StockTable";
-
-interface StockRef {
-  code: string;
-  name: string;
-}
-
-interface Article {
-  title: string;
-  description: string | null;
-  url: string;
-  source: string;
-  publishedAt: string;
-  imageUrl: string | null;
-  stocks: StockRef[];
-}
+import { getJson } from "@/lib/api-client";
+import type { Article, NewsResponse, StockRef } from "@/types";
 
 export default function Home() {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -25,17 +12,16 @@ export default function Home() {
   const [selectedStock, setSelectedStock] = useState<StockRef | null>(null);
 
   useEffect(() => {
-    fetch("/api/news")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) {
-          setError(data.error);
-        } else {
-          setArticles(data.articles ?? []);
-        }
+    const controller = new AbortController();
+    getJson<NewsResponse>("/api/news", controller.signal)
+      .then((data) => setArticles(data.articles))
+      .catch((err: Error) => {
+        if (err.name !== "AbortError") setError(err.message);
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, []);
 
   return (
@@ -69,9 +55,9 @@ export default function Home() {
 
         <div className="grid gap-6 md:grid-cols-2">
           <ul className="space-y-4">
-            {articles.map((a, i) => (
+            {articles.map((a) => (
               <li
-                key={i}
+                key={a.url}
                 className="rounded-xl border border-neutral-800 bg-neutral-900 p-4"
               >
                 <a
@@ -111,7 +97,7 @@ export default function Home() {
 
           <div className="md:sticky md:top-10 md:self-start">
             {selectedStock ? (
-              <StockTable stock={selectedStock} />
+              <StockTable key={selectedStock.code} stock={selectedStock} />
             ) : (
               <div className="rounded-xl border border-dashed border-neutral-800 p-6 text-sm text-neutral-500">
                 Bir haberdeki hisse etiketine tıklayarak son 30 günlük fiyat
